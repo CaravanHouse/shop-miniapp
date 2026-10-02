@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { Bot } from "grammy";
 import { createApp } from "../server/app";
-import { orderText, registerHandlers } from "../server/bot";
+import { orderText, registerHandlers, telegramNotifier } from "../server/bot";
 import { Shop, type Order } from "../server/shop";
 import { totals } from "../shared/products";
 
@@ -65,6 +65,16 @@ assert.equal(changed.at(-1)?.status, "accepted", "клиенту уходит у
 await bot.handleUpdate(cb(555, "ord:1:delivering"));
 await bot.handleUpdate(cb(555, "ord:1:done"));
 assert.equal(shop.get(1)?.status, "done");
+await bot.handleUpdate(cb(555, "ord:1:canceled"));
+await bot.handleUpdate(cb(555, "ord:1:accepted"));
+assert.equal(shop.get(1)?.status, "done", "старые кнопки не откатывают статус");
+assert.equal(calls.at(-1)?.payload.text, "Статус уже изменён");
+
+// 5. сбой сообщения владельцу не мешает подтверждению клиенту
+const toCustomer: unknown[] = [];
+const flaky = { async sendMessage(chatId: unknown) { if (chatId === "555") throw new Error("chat not found"); toCustomer.push(chatId); } } as any;
+await assert.rejects(telegramNotifier(flaky, "555").newOrder(shop.get(2)!), /chat not found/, "ошибка владельца не теряется");
+assert.deepEqual(toCustomer, [77], "клиент всё равно получил подтверждение");
 
 console.log("✓ все проверки пройдены");
 process.exit(0);

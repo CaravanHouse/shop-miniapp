@@ -18,6 +18,10 @@ export type CreateResult = { ok: true; order: Order } | { ok: false; error: stri
 
 const PHONE = /^\+?[0-9\s\-()]{9,18}$/;
 
+/** Допустимые переходы: повторный тап или кнопка из старого сообщения не откатит статус назад */
+const NEXT: Record<OrderStatus, OrderStatus[]> = { new: ["accepted", "canceled"], accepted: ["delivering", "canceled"], delivering: ["done"], done: [], canceled: [] };
+export type StatusResult = { ok: true; order: Order } | { ok: false; error: string };
+
 export class Shop {
   db: JsonDb<DbShape>;
   private hits = new Map<number, number[]>();
@@ -58,15 +62,14 @@ export class Shop {
 
   get(id: number) { return this.db.data.orders.find((o) => o.id === id); }
 
-  setStatus(id: number, status: OrderStatus): Order | undefined {
+  setStatus(id: number, status: OrderStatus): StatusResult {
     const o = this.get(id);
-    if (!o) return undefined;
-    if (o.status !== status) {
-      o.status = status;
-      this.db.save();
-      void this.notifier.statusChanged(o).catch(() => {});
-    }
-    return o;
+    if (!o) return { ok: false, error: "Заказ не найден" };
+    if (!NEXT[o.status].includes(status)) return { ok: false, error: "Статус уже изменён" };
+    o.status = status;
+    this.db.save();
+    void this.notifier.statusChanged(o).catch(() => {});
+    return { ok: true, order: o };
   }
 
   active() { return this.db.data.orders.filter((o) => o.status !== "done" && o.status !== "canceled"); }

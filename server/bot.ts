@@ -44,8 +44,12 @@ const customerText = (o: Order): string | null => {
 export function telegramNotifier(api: Api, ownerChatId?: string): Notifier {
   return {
     async newOrder(o) {
-      if (ownerChatId) await api.sendMessage(ownerChatId, orderText(o), { parse_mode: "HTML", reply_markup: orderKeyboard(o) });
-      await api.sendMessage(o.userId, `✅ Заказ №${o.id} оформлен на ${money(o.total)}. Мы напишем, когда начнём собирать.`).catch(() => {});
+      // владельцу и клиенту отправляем независимо: сбой одного сообщения не мешает второму
+      const [owner] = await Promise.allSettled([
+        ownerChatId ? api.sendMessage(ownerChatId, orderText(o), { parse_mode: "HTML", reply_markup: orderKeyboard(o) }) : undefined,
+        api.sendMessage(o.userId, `✅ Заказ №${o.id} оформлен на ${money(o.total)}. Мы напишем, когда начнём собирать.`),
+      ]);
+      if (owner.status === "rejected") throw owner.reason;
     },
     async statusChanged(o) {
       const text = customerText(o);
@@ -76,10 +80,10 @@ export function registerHandlers(bot: Bot, shop: Shop, opts: { webappUrl?: strin
 
   bot.callbackQuery(/^ord:(\d+):(accepted|delivering|done|canceled)$/, async (ctx) => {
     if (!isOwner(ctx.chat?.id)) return ctx.answerCallbackQuery({ text: "Нет доступа", show_alert: true });
-    const o = shop.setStatus(Number(ctx.match[1]), ctx.match[2] as OrderStatus);
-    if (!o) return ctx.answerCallbackQuery({ text: "Заказ не найден" });
-    await ctx.editMessageText(orderText(o), { parse_mode: "HTML", reply_markup: orderKeyboard(o) });
-    return ctx.answerCallbackQuery({ text: STATUS[o.status] });
+    const r = shop.setStatus(Number(ctx.match[1]), ctx.match[2] as OrderStatus);
+    if (!r.ok) return ctx.answerCallbackQuery({ text: r.error });
+    await ctx.editMessageText(orderText(r.order), { parse_mode: "HTML", reply_markup: orderKeyboard(r.order) });
+    return ctx.answerCallbackQuery({ text: STATUS[r.order.status] });
   });
 }
 

@@ -1,5 +1,7 @@
 # Витрина магазина: Telegram Mini App
 
+[![CI](https://github.com/CaravanHouse/shop-miniapp/actions/workflows/ci.yml/badge.svg)](https://github.com/CaravanHouse/shop-miniapp/actions/workflows/ci.yml)
+
 Каталог, корзина и оформление заказа внутри Telegram. Заказ приходит владельцу в бот, статус он меняет кнопками, а клиент получает уведомления.
 
 **Что показывает клиенту:** готовый магазин в Telegram без установки приложения. Демо-каталог — цветочный магазин, легко заменить (`shared/products.ts`).
@@ -21,4 +23,7 @@ npm start
 ```
 Проверка интерфейса в браузере: `DEV_NO_AUTH=1`, затем `npm run dev:server` и `npm run dev:web`. Тесты: `npm test`.
 
-> Хранилище JSON подходит для демо. Для продакшена замените на PostgreSQL. Онлайн-оплата (Click/Payme) в демо не подключена.
+## Данные
+Заказы хранятся в JSON-файлах в папке `DATA_DIR` (по умолчанию `./data`). Диск Railway очищается при каждом деплое, поэтому подключите к сервису Volume с путём `/data` и задайте `DATA_DIR=/data`, тогда данные переживут перезапуски и деплои. При большой нагрузке переходите на PostgreSQL.
+
+> Онлайн-оплата (Click/Payme) в демо не подключена.
