@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { CATEGORIES, PRODUCTS, money, productById, totals, type CategoryId, type Product } from "../../shared/products";
+import { CATEGORIES, DELIVERY_FEE, FREE_DELIVERY_FROM, PRODUCTS, money, productById, totals, type CategoryId, type Product } from "../../shared/products";
 import { haptic, initData, tap, tg, useMainButton } from "./tg";
 
 type View = "catalog" | "cart" | "checkout" | "done";
@@ -59,8 +59,10 @@ export default function App() {
         method: "POST", headers: { "Content-Type": "application/json", "X-Init-Data": initData() },
         body: JSON.stringify({ items: lines, name, phone, pickup, address, comment }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(res.status === 401 ? "Откройте магазин из Telegram, чтобы оформить заказ" : data.error);
+      // при сбое прокси или перезапуске сервера ответ может прийти не в JSON
+      const data = (await res.json().catch(() => ({}))) as { id?: number; error?: string };
+      if (res.status === 401) throw new Error("Откройте магазин из Telegram, чтобы оформить заказ");
+      if (!res.ok || typeof data.id !== "number") throw new Error(data.error ?? "Не удалось отправить заказ, попробуйте ещё раз");
       setOrderId(data.id); setCart({}); setView("done"); haptic("success");
     } catch (e) {
       setError((e as Error).message || "Не удалось отправить заказ"); haptic("error");
@@ -128,7 +130,7 @@ export default function App() {
           {!pickup && <label>Адрес доставки<input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Улица, дом, ориентир" autoComplete="street-address" /></label>}
           <label>Комментарий<textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="Время, текст открытки…" maxLength={300} /></label>
           {error && <p className="err" role="alert">{error}</p>}
-          <p className="fine">{pickup ? "Самовывоз бесплатно." : sum.delivery ? "Доставка 25 000 сум, от 400 000 сум — бесплатно." : "Доставка бесплатно."}</p>
+          <p className="fine">{pickup ? "Самовывоз бесплатно." : sum.delivery ? `Доставка ${money(DELIVERY_FEE)}, от ${money(FREE_DELIVERY_FROM)} — бесплатно.` : "Доставка бесплатно."}</p>
         </section>
       )}
 

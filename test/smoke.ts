@@ -9,6 +9,7 @@ import { createApp } from "../server/app";
 import { orderText, registerHandlers, telegramNotifier } from "../server/bot";
 import { Shop, type Order } from "../server/shop";
 import { totals } from "../shared/products";
+import { httpsUrl } from "../server/env";
 
 // 1. формула суммы
 assert.deepEqual(totals([{ id: "s2", qty: 5 }], false), { subtotal: 90_000, delivery: 25_000, total: 115_000 }, "доставка платная до порога");
@@ -75,6 +76,11 @@ const toCustomer: unknown[] = [];
 const flaky = { async sendMessage(chatId: unknown) { if (chatId === "555") throw new Error("chat not found"); toCustomer.push(chatId); } } as any;
 await assert.rejects(telegramNotifier(flaky, "555").newOrder(shop.get(2)!), /chat not found/, "ошибка владельца не теряется");
 assert.deepEqual(toCustomer, [77], "клиент всё равно получил подтверждение");
+
+// адрес мини-аппа для кнопок Telegram
+assert.equal(httpsUrl("WEBAPP_URL", "shop.up.railway.app"), "https://shop.up.railway.app/", "без схемы дописываем https://");
+assert.equal(httpsUrl("WEBAPP_URL", "http://shop.up.railway.app"), undefined, "http не принимаем");
+assert.equal(httpsUrl("WEBAPP_URL", undefined), undefined);
 
 console.log("✓ все проверки пройдены");
 process.exit(0);
