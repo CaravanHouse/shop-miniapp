@@ -14,8 +14,12 @@ interface TgWebApp {
 }
 declare global { interface Window { Telegram?: { WebApp: TgWebApp } } }
 
-/** undefined, если открыто просто в браузере */
-export const tg = window.Telegram?.WebApp;
+/**
+ * undefined, если открыто просто в браузере. Скрипт telegram-web-app.js создаёт WebApp и вне Telegram,
+ * поэтому настоящий Telegram узнаём по initData: без него вместо MainButton показываем свою кнопку внизу.
+ */
+const webApp = window.Telegram?.WebApp;
+export const tg = webApp?.initData ? webApp : undefined;
 export const initData = () => tg?.initData ?? "";
 export const haptic = (t: "success" | "error") => tg?.HapticFeedback?.notificationOccurred(t);
 export const tap = () => tg?.HapticFeedback?.impactOccurred("light");
