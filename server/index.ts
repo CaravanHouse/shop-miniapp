@@ -11,6 +11,8 @@ const token = process.env.BOT_TOKEN;
 const devNoAuth = process.env.DEV_NO_AUTH === "1";
 const webappUrl = httpsUrl("WEBAPP_URL", process.env.WEBAPP_URL);
 const ownerChatId = process.env.OWNER_CHAT_ID;
+// DEMO_MODE=1: посетитель сам управляет своим заказом, настоящему владельцу ничего не приходит
+const demo = process.env.DEMO_MODE === "1";
 const port = Number(process.env.PORT ?? 3000);
 // На Railway укажите путь к подключённому Volume (например /data), иначе данные сотрутся при деплое
 const dataDir = process.env.DATA_DIR || join(process.cwd(), "data");
@@ -21,17 +23,18 @@ if (devNoAuth && onRailway) {
 }
 if (!token && !devNoAuth) { console.error("Укажите BOT_TOKEN в .env (или DEV_NO_AUTH=1 для запуска без бота)"); process.exit(1); }
 if (token && !webappUrl) console.warn("WEBAPP_URL не задан: кнопка «Открыть магазин» не появится. Укажите https-адрес проекта");
-if (token && !ownerChatId) console.warn("OWNER_CHAT_ID не задан: напишите боту /id и впишите значение в .env");
+if (demo) console.log("Демо-режим: карточки заказов получает сам покупатель");
+if (token && !demo && !ownerChatId) console.warn("OWNER_CHAT_ID не задан: напишите боту /id и впишите значение в .env");
 
 const bot = token ? new Bot(token) : null;
 const log: Notifier = { async newOrder(o) { console.log("Новый заказ (Telegram не настроен):", o.id, o.total); }, async statusChanged() {} };
-const shop = new Shop(join(dataDir, "shop.json"), bot ? telegramNotifier(bot.api, ownerChatId) : log);
+const shop = new Shop(join(dataDir, "shop.json"), bot ? telegramNotifier(bot.api, ownerChatId, demo) : log);
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 createApp(shop, token ?? "dev", devNoAuth, dist).listen(port, () => console.log(`Магазин: http://localhost:${port}`));
 
 if (bot) {
-  registerHandlers(bot, shop, { webappUrl, ownerChatId });
+  registerHandlers(bot, shop, { webappUrl, ownerChatId, demo });
   bot.catch((e) => console.error("Ошибка бота:", e.message));
   void setupMenu(bot, webappUrl);
   void bot.start({ onStart: (me) => console.log(`Бот @${me.username} запущен`) });

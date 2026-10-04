@@ -77,6 +77,22 @@ const flaky = { async sendMessage(chatId: unknown) { if (chatId === "555") throw
 await assert.rejects(telegramNotifier(flaky, "555").newOrder(shop.get(2)!), /chat not found/, "ошибка владельца не теряется");
 assert.deepEqual(toCustomer, [77], "клиент всё равно получил подтверждение");
 
+// 6. демо-режим: владельцу ничего не приходит, покупатель сам управляет своим заказом
+const demoMsgs: { chatId: unknown; text: string; kb?: unknown }[] = [];
+const demoApi = { async sendMessage(chatId: unknown, text: string, o?: { reply_markup?: unknown }) { demoMsgs.push({ chatId, text, kb: o?.reply_markup }); } } as any;
+await telegramNotifier(demoApi, "555", true).newOrder(shop.get(2)!);
+assert.equal(demoMsgs.filter((m) => m.chatId === "555").length, 0, "в демо владельцу не пишем");
+assert.ok(demoMsgs.some((m) => m.chatId === 77 && m.text.includes("Демо CaravanHouse") && m.kb), "покупатель получил карточку владельца с кнопками");
+const demoBot = new Bot(TOKEN, { botInfo: (bot as any).botInfo });
+const demoCalls: { method: string; payload: any }[] = [];
+demoBot.api.config.use(async (_p, method, payload) => { demoCalls.push({ method, payload }); return { ok: true, result: true } as any; });
+registerHandlers(demoBot, shop, { ownerChatId: "555", demo: true });
+const cbFrom = (userId: number, data: string) => ({ update_id: Math.floor(Math.random() * 1e6), callback_query: { id: "c", chat_instance: "x", from: { id: userId, is_bot: false, first_name: "u" }, data, message: { message_id: 4, date: 0, chat: { id: userId, type: "private" }, text: "x" } } } as any);
+await demoBot.handleUpdate(cbFrom(78, "ord:2:accepted"));
+assert.equal(shop.get(2)?.status, "new", "чужой покупатель не управляет заказом");
+await demoBot.handleUpdate(cbFrom(77, "ord:2:accepted"));
+assert.equal(shop.get(2)?.status, "accepted", "покупатель в демо управляет своим заказом");
+
 // адрес мини-аппа для кнопок Telegram
 assert.equal(httpsUrl("WEBAPP_URL", "shop.up.railway.app"), "https://shop.up.railway.app/", "без схемы дописываем https://");
 assert.equal(httpsUrl("WEBAPP_URL", "http://shop.up.railway.app"), undefined, "http не принимаем");
