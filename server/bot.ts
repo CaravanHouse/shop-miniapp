@@ -41,9 +41,21 @@ const customerText = (o: Order): string | null => {
   }
 };
 
-export function telegramNotifier(api: Api, ownerChatId?: string): Notifier {
+const DEMO_NOTE =
+  "🧪 <b>Демо CaravanHouse.</b> Сейчас вы — владелец магазина: так заказ видит продавец. Меняйте статус кнопками ниже — уведомления покупателю тоже придут вам.\n\n";
+
+/**
+ * demo = true: карточку владельца с кнопками получает сам покупатель. Посетитель сайта проходит обе роли,
+ * а настоящему владельцу (OWNER_CHAT_ID) демо-заказы не приходят.
+ */
+export function telegramNotifier(api: Api, ownerChatId?: string, demo = false): Notifier {
   return {
     async newOrder(o) {
+      if (demo) {
+        await api.sendMessage(o.userId, `✅ Заказ №${o.id} оформлен на ${money(o.total)}.`);
+        await api.sendMessage(o.userId, DEMO_NOTE + orderText(o), { parse_mode: "HTML", reply_markup: orderKeyboard(o) });
+        return;
+      }
       // владельцу и клиенту отправляем независимо: сбой одного сообщения не мешает второму
       const [owner] = await Promise.allSettled([
         ownerChatId ? api.sendMessage(ownerChatId, orderText(o), { parse_mode: "HTML", reply_markup: orderKeyboard(o) }) : undefined,
@@ -58,11 +70,17 @@ export function telegramNotifier(api: Api, ownerChatId?: string): Notifier {
   };
 }
 
-export function registerHandlers(bot: Bot, shop: Shop, opts: { webappUrl?: string; ownerChatId?: string }) {
+export function registerHandlers(bot: Bot, shop: Shop, opts: { webappUrl?: string; ownerChatId?: string; demo?: boolean }) {
   const isOwner = (chatId?: number) => !!opts.ownerChatId && String(chatId) === String(opts.ownerChatId);
+  // в демо статусом своего заказа управляет сам покупатель (и только своим)
+  const canManage = (orderId: number, chatId?: number, userId?: number) =>
+    isOwner(chatId) || (!!opts.demo && shop.get(orderId)?.userId === userId && chatId === userId);
   const openKb = () => (opts.webappUrl ? new InlineKeyboard().webApp("💐 Открыть магазин", opts.webappUrl) : undefined);
 
-  bot.command("start", (ctx) => ctx.reply("🌷 <b>Лола · цветы</b>\n\nВыберите букет в каталоге, оформите заказ — и мы привезём.\n\n/my — мои заказы", { parse_mode: "HTML", reply_markup: openKb() }));
+  const intro = opts.demo
+    ? "🌷 <b>Лола · цветы</b> — демо-магазин от CaravanHouse.\n\nОформите заказ в каталоге, а потом побудьте владельцем: меняйте статус заказа кнопками и смотрите, что получает покупатель. Ничего не доставляется и не оплачивается.\n\n/my — мои заказы"
+    : "🌷 <b>Лола · цветы</b>\n\nВыберите букет в каталоге, оформите заказ — и мы привезём.\n\n/my — мои заказы";
+  bot.command("start", (ctx) => ctx.reply(intro, { parse_mode: "HTML", reply_markup: openKb() }));
   bot.command("id", (ctx) => ctx.reply(`id этого чата: <code>${ctx.chat.id}</code>\nВпишите его в OWNER_CHAT_ID.`, { parse_mode: "HTML" }));
 
   bot.command("my", (ctx) => {
@@ -79,7 +97,7 @@ export function registerHandlers(bot: Bot, shop: Shop, opts: { webappUrl?: strin
   });
 
   bot.callbackQuery(/^ord:(\d+):(accepted|delivering|done|canceled)$/, async (ctx) => {
-    if (!isOwner(ctx.chat?.id)) return ctx.answerCallbackQuery({ text: "Нет доступа", show_alert: true });
+    if (!canManage(Number(ctx.match[1]), ctx.chat?.id, ctx.from?.id)) return ctx.answerCallbackQuery({ text: "Нет доступа", show_alert: true });
     const r = shop.setStatus(Number(ctx.match[1]), ctx.match[2] as OrderStatus);
     if (!r.ok) return ctx.answerCallbackQuery({ text: r.error });
     await ctx.editMessageText(orderText(r.order), { parse_mode: "HTML", reply_markup: orderKeyboard(r.order) });
