@@ -20,7 +20,7 @@ export function orderText(o: Order): string {
   ].join("\n");
 }
 
-export function orderKeyboard(o: Order): InlineKeyboard | undefined {
+function orderKeyboard(o: Order): InlineKeyboard | undefined {
   const kb = new InlineKeyboard();
   switch (o.status) {
     case "new": kb.text("👩‍🌾 Принять", `ord:${o.id}:accepted`).text("🚫 Отменить", `ord:${o.id}:canceled`); break;
