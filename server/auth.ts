@@ -7,7 +7,7 @@ export interface TgUser { id: number; first_name: string; last_name?: string; us
  * Проверка подписи initData из Telegram Mini App.
  * https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
  */
-export function validateInitData(initData: string, botToken: string, maxAgeSec = 86_400): TgUser | null {
+function validateInitData(initData: string, botToken: string, maxAgeSec = 86_400): TgUser | null {
   const params = new URLSearchParams(initData);
   const hash = params.get("hash");
   if (!hash) return null;
@@ -42,4 +42,3 @@ export function authMiddleware(botToken: string, devNoAuth: boolean): RequestHan
 }
 
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-export const displayName = (u: TgUser) => [u.first_name, u.last_name].filter(Boolean).join(" ");
